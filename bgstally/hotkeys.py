@@ -24,14 +24,14 @@ class Hotkeys:
         if not self._load_api():
             return False
 
-        previous_action = self._create_action_with_retries(
+        previous_ok = self._register_action(
             action_id="bgstally.progress.previous_build",
             label="Previous Build",
             callback=self._previous_build,
             thread_policy="main",
             cardinality="single"
         )
-        next_action = self._create_action_with_retries(
+        next_ok = self._register_action(
             action_id="bgstally.progress.next_build",
             label="Next Build",
             callback=self._next_build,
@@ -39,14 +39,7 @@ class Hotkeys:
             cardinality="single"
         )
 
-        all_ok: bool = True
-        for action in [previous_action, next_action]:
-            if action is None:
-                all_ok = False
-                continue
-            all_ok = self._register_action_with_retries(action) and all_ok
-
-        return all_ok
+        return previous_ok and next_ok
 
     def _load_api(self) -> bool:
         """
@@ -72,64 +65,38 @@ class Hotkeys:
 
         return False
 
-    def _create_action_with_retries(
+    def _register_action(
         self,
         action_id: str,
         label: str,
         callback: Callable[..., Any],
         thread_policy: str = "main",
         cardinality: str = "single",
-    ) -> Any | None:
+    ) -> bool:
         """
-        Build an Action object with retry/backoff.
+        Build and register an Action with EDMCHotkeys.
         """
-        for attempt in range(1, MAX_RETRIES + 1):
-            try:
-                if self._action_class is None:
-                    raise RuntimeError("Action class unavailable")
+        try:
+            if self._action_class is None:
+                raise RuntimeError("Action class unavailable")
+            if self._hotkeys_api is None:
+                raise RuntimeError("EDMCHotkeys API unavailable")
 
-                return self._action_class(
-                    id=action_id,
-                    label=label,
-                    plugin=self.plugin_name,
-                    callback=callback,
-                    thread_policy=thread_policy,
-                    cardinality=cardinality,
-                )
-            except Exception as e:
-                if attempt >= MAX_RETRIES:
-                    Debug.logger.error(f"Failed to create hotkey action '{action_id}' after {MAX_RETRIES} attempts", exc_info=e)
-                    return None
+            action = self._action_class(
+                id=action_id,
+                label=label,
+                plugin=self.plugin_name,
+                callback=callback,
+                thread_policy=thread_policy,
+                cardinality=cardinality,
+            )
 
-                delay = self._backoff_seconds(attempt)
-                Debug.logger.info(f"Failed creating action '{action_id}' (attempt {attempt}/{MAX_RETRIES}), retrying in {delay:.2f}s")
-                sleep(delay)
-
-        return None
-
-    def _register_action_with_retries(self, action: Any) -> bool:
-        """
-        Register an Action with EDMCHotkeys using retry/backoff.
-        """
-        for attempt in range(1, MAX_RETRIES + 1):
-            try:
-                if self._hotkeys_api is None:
-                    raise RuntimeError("EDMCHotkeys API unavailable")
-
-                if bool(self._hotkeys_api.register_action(action)):
-                    return True
-
-                raise RuntimeError("register_action returned False")
-            except Exception as e:
-                if attempt >= MAX_RETRIES:
-                    Debug.logger.error(f"Failed to register hotkey action '{action.id}' after {MAX_RETRIES} attempts", exc_info=e)
-                    return False
-
-                delay = self._backoff_seconds(attempt)
-                Debug.logger.info(f"Failed registering action '{action.id}' (attempt {attempt}/{MAX_RETRIES}), retrying in {delay:.2f}s")
-                sleep(delay)
-
-        return False
+            if bool(self._hotkeys_api.register_action(action)):
+                return True
+            raise RuntimeError("register_action returned False")
+        except Exception as e:
+            Debug.logger.error(f"Failed to register hotkey action '{action_id}'", exc_info=e)
+            return False
 
     def _previous_build(self, *, payload=None, source: str = "hotkey", hotkey: str | None = None) -> bool:
         del payload, source, hotkey
