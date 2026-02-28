@@ -19,6 +19,7 @@ from bgstally.discord import Discord
 from bgstally.factionmanager import FactionManager
 from bgstally.fleetcarrier import FleetCarrier
 from bgstally.formattermanager import ActivityFormatterManager
+from bgstally.hotkeys import Hotkeys
 from bgstally.market import Market
 from bgstally.missionlog import MissionLog
 from bgstally.objectivesmanager import ObjectivesManager
@@ -104,6 +105,8 @@ class BGSTally:
         self.objectives_manager: ObjectivesManager = ObjectivesManager(self)
         self.colonisation: Colonisation = Colonisation(self)
         self.faction_manager: FactionManager = FactionManager(self)
+        self.hotkeys: Hotkeys = Hotkeys(self)
+        self.hotkeys.initialize()
 
         self.tick_thread: Thread = Thread(target=self._tick_worker, name="BGSTally Tick worker")
         self.tick_thread.daemon = True
