@@ -1,4 +1,3 @@
-import importlib
 from time import sleep
 from typing import Any, Callable
 
@@ -10,7 +9,7 @@ BASE_BACKOFF_SECONDS = 0.25
 
 class Hotkeys:
     """
-    Minimal EDMC-Hotkeys integration for progress window build navigation.
+    Minimal EDMCHotkeys integration
     """
     def __init__(self, bgstally) -> None:
         self.bgstally = bgstally
@@ -29,11 +28,15 @@ class Hotkeys:
             action_id="bgstally.progress.previous_build",
             label="Previous Build",
             callback=self._previous_build,
+            thread_policy="main",
+            cardinality="single"
         )
         next_action = self._create_action_with_retries(
             action_id="bgstally.progress.next_build",
             label="Next Build",
             callback=self._next_build,
+            thread_policy="main",
+            cardinality="single"
         )
 
         all_ok: bool = True
@@ -47,27 +50,36 @@ class Hotkeys:
 
     def _load_api(self) -> bool:
         """
-        Load EDMC-Hotkeys API and Action class.
+        Load EDMCHotkeys API and Action class.
         """
         for attempt in range(1, MAX_RETRIES + 1):
             try:
-                self._hotkeys_api = importlib.import_module("EDMC-Hotkeys.load")
-                registry_module = importlib.import_module("edmc_hotkeys.registry")
-                self._action_class = getattr(registry_module, "Action")
+                import EDMCHotkeys as hotkeys_api
+                from edmc_hotkeys.registry import Action
+
+                self._hotkeys_api = hotkeys_api
+                self._action_class = Action
                 return True
             except Exception as e:
                 if attempt >= MAX_RETRIES:
-                    Debug.logger.info("EDMC-Hotkeys not available, skipping hotkey registration")
+                    Debug.logger.info("EDMCHotkeys not available, skipping hotkey registration")
                     Debug.logger.debug("Hotkeys load failed after retries", exc_info=e)
                     return False
 
                 delay = self._backoff_seconds(attempt)
-                Debug.logger.info(f"EDMC-Hotkeys load failed (attempt {attempt}/{MAX_RETRIES}), retrying in {delay:.2f}s")
+                Debug.logger.info(f"EDMCHotkeys load failed (attempt {attempt}/{MAX_RETRIES}), retrying in {delay:.2f}s")
                 sleep(delay)
 
         return False
 
-    def _create_action_with_retries(self, action_id: str, label: str, callback: Callable[..., Any]) -> Any | None:
+    def _create_action_with_retries(
+        self,
+        action_id: str,
+        label: str,
+        callback: Callable[..., Any],
+        thread_policy: str = "main",
+        cardinality: str = "single",
+    ) -> Any | None:
         """
         Build an Action object with retry/backoff.
         """
@@ -81,8 +93,8 @@ class Hotkeys:
                     label=label,
                     plugin=self.plugin_name,
                     callback=callback,
-                    thread_policy="main",
-                    cardinality="single",
+                    thread_policy=thread_policy,
+                    cardinality=cardinality,
                 )
             except Exception as e:
                 if attempt >= MAX_RETRIES:
@@ -97,12 +109,12 @@ class Hotkeys:
 
     def _register_action_with_retries(self, action: Any) -> bool:
         """
-        Register an Action with EDMC-Hotkeys using retry/backoff.
+        Register an Action with EDMCHotkeys using retry/backoff.
         """
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 if self._hotkeys_api is None:
-                    raise RuntimeError("EDMC-Hotkeys API unavailable")
+                    raise RuntimeError("EDMCHotkeys API unavailable")
 
                 if bool(self._hotkeys_api.register_action(action)):
                     return True
